@@ -7,32 +7,21 @@
 </head>
 <body>
   <h1>EuroMillions Analyser</h1>
-  <p>Chargement des données...</p>
-  <pre id="output"></pre>
+  <p id="status">Chargement des données...</p>
 
-  <script type="module">
-    const CSV_URL = 'https://cdn.jsdelivr.net/gh/githubbbenjamin/euromillions-analyser@main/data/draws.csv';
+  <script>
+    const CSV_URL = 'https://cdn.jsdelivr.net/gh/githubpbenjamin/euromillions-analyser@main/data/draws.csv';
 
-    async function loadDraws() {
-      const res  = await fetch(CSV_URL);
-      const text = await res.text();
-      return text.trim().split('\n').slice(1).map(line => {
-        const [date, n1, n2, n3, n4, n5, s1, s2] = line.split(',');
-        return {
-          date,
-          nums:    [n1,n2,n3,n4,n5].map(Number),
-          stars:   [s1,s2].map(Number),
-          quarter: `${date.slice(0,4)}-T${Math.ceil(+date.slice(5,7)/3)}`
-        };
+    fetch(CSV_URL)
+      .then(r => r.text())
+      .then(text => {
+        const rows = text.trim().split('\n').slice(1).filter(l => l.trim());
+        document.getElementById('status').textContent =
+          rows.length + ' tirages chargés. Dernier : ' + (rows.at(-1)||'').split(',')[0];
+      })
+      .catch(err => {
+        document.getElementById('status').textContent = 'Erreur : ' + err.message;
       });
-    }
-
-    loadDraws().then(draws => {
-      document.getElementById('output').textContent =
-        `${draws.length} tirages chargés. Dernier : ${draws.at(-1)?.date}`;
-    }).catch(err => {
-      document.getElementById('output').textContent = 'Erreur : ' + err.message;
-    });
   </script>
 </body>
 </html>
