@@ -21,9 +21,6 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Installer les dépendances
-        run: cd scripts && npm ci
-
       - name: Valider le CSV
         run: |
           cd scripts

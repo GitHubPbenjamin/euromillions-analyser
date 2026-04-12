@@ -25,11 +25,6 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Installer les dépendances
-        run: |
-          cd scripts
-          npm ci
-
       - name: Récupérer les résultats
         id: fetch
         run: |

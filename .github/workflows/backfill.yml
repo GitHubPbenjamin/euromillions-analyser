@@ -36,9 +36,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: scripts/package.json
 
-      - name: Installer les dépendances
-        run: cd scripts && npm ci
-
       - name: Lancer le backfill
         run: |
           cd scripts

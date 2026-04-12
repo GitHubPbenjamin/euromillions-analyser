@@ -8,9 +8,21 @@
  *   node backfill.js --from 2004-02-13          (depuis le tout premier tirage)
  */
 
-import fs       from 'fs';
-import path     from 'path';
-import minimist from 'minimist';
+import fs   from 'fs';
+import path from 'path';
+
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const result = {};
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith('--')) {
+      const key = args[i].slice(2);
+      result[key] = args[i + 1] ?? true;
+      i++;
+    }
+  }
+  return result;
+}
 
 const API_BASE  = 'https://euromillions.api.pedromealha.dev/v1';
 const DATA_FILE = process.env.DATA_FILE ?? '../data/draws.csv';
@@ -70,7 +82,7 @@ async function fetchDrawsByYear(year) {
 /* ── Main ──────────────────────────────────────────────── */
 
 async function main() {
-  const args     = minimist(process.argv.slice(2));
+  const args     = parseArgs();
   const fromDate = args.from ?? '2021-01-01';
   const toDate   = args.to   ?? new Date().toISOString().slice(0, 10);
   const filePath = path.resolve(DATA_FILE);
