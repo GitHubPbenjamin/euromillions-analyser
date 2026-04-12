@@ -1,16 +1,27 @@
-const CSV_URL =
-  'https://cdn.jsdelivr.net/gh/githubpbenjamin/euromillions-analyser@main/data/draws.csv';
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EuroMillions Analyser</title>
+</head>
+<body>
+  <h1>EuroMillions Analyser</h1>
+  <p id="status">Chargement des données...</p>
 
-async function loadDraws() {
-  const res  = await fetch(CSV_URL);
-  const text = await res.text();
-  return text.trim().split('\n').slice(1).map(line => {
-    const [date, n1, n2, n3, n4, n5, s1, s2] = line.split(',');
-    return {
-      date,
-      nums:  [n1,n2,n3,n4,n5].map(Number),
-      stars: [s1,s2].map(Number),
-      quarter: `${date.slice(0,4)}-T${Math.ceil(+date.slice(5,7)/3)}`
-    };
-  });
-}
+  <script>
+    const CSV_URL = 'https://cdn.jsdelivr.net/gh/githubpbenjamin/euromillions-analyser@main/data/draws.csv';
+
+    fetch(CSV_URL)
+      .then(r => r.text())
+      .then(text => {
+        const rows = text.trim().split('\n').slice(1).filter(l => l.trim());
+        document.getElementById('status').textContent =
+          rows.length + ' tirages chargés. Dernier : ' + (rows.at(-1)||'').split(',')[0];
+      })
+      .catch(err => {
+        document.getElementById('status').textContent = 'Erreur : ' + err.message;
+      });
+  </script>
+</body>
+</html>
