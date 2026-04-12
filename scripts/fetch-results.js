@@ -2,11 +2,11 @@
  * fetch-results.js
  * Récupère le dernier tirage EuroMillions et l'ajoute à draws.csv si absent.
  * Source : https://euromillions.api.pedromealha.dev (API communautaire gratuite)
+ * Utilise le fetch natif de Node 24 — aucune dépendance externe.
  */
 
-import fetch from 'node-fetch';
-import fs    from 'fs';
-import path  from 'path';
+import fs   from 'fs';
+import path from 'path';
 
 const API_BASE  = 'https://euromillions.api.pedromealha.dev/v1';
 const DATA_FILE = process.env.DATA_FILE ?? '../data/draws.csv';

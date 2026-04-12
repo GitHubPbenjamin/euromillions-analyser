@@ -1,13 +1,13 @@
 /**
  * backfill.js
  * Télécharge tous les tirages entre deux dates et les ajoute à draws.csv.
+ * Utilise le fetch natif de Node 24 — aucune dépendance externe.
  *
  * Usage :
  *   node backfill.js --from 2021-01-01 --to 2024-12-31
  *   node backfill.js --from 2004-02-13          (depuis le tout premier tirage)
  */
 
-import fetch    from 'node-fetch';
 import fs       from 'fs';
 import path     from 'path';
 import minimist from 'minimist';
