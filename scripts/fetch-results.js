@@ -1,30 +1,33 @@
 /**
  * fetch-results.js
- * Récupère le dernier tirage EuroMillions depuis euro-millions.com
+ * Récupère le dernier tirage EuroMillions depuis fdj.fr
  * et l'ajoute à draws.csv si absent.
  *
+ * Source : fdj.fr/jeux-de-tirage/euromillions-my-million/resultats
  * Zéro dépendance externe — Node 24 natif uniquement.
  */
 
 import fs   from 'fs';
 import path from 'path';
 
-const BASE_URL   = 'https://www.euro-millions.com';
-const DATA_FILE  = process.env.DATA_FILE ?? '../data/draws.csv';
-const CSV_HEADER = 'date,n1,n2,n3,n4,n5,s1,s2';
+const FDJ_RESULTS = 'https://www.fdj.fr/jeux-de-tirage/euromillions-my-million/resultats';
+const DATA_FILE   = process.env.DATA_FILE ?? '../data/draws.csv';
+const CSV_HEADER  = 'date,n1,n2,n3,n4,n5,s1,s2';
 
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (compatible; euromillions-analyser/1.0)',
-  'Accept': 'text/html,application/xhtml+xml',
-  'Accept-Language': 'en-GB,en;q=0.9',
+  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'fr-FR,fr;q=0.9',
+  'Cache-Control': 'no-cache',
 };
 
-/* ── Helpers CSV ─────────────────────────────────────── */
+/* ── CSV ─────────────────────────────────────────────── */
 
 function readExistingDates(filePath) {
   if (!fs.existsSync(filePath)) return new Set();
-  const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n');
-  return new Set(lines.slice(1).map(l => l.split(',')[0]));
+  return new Set(
+    fs.readFileSync(filePath, 'utf8').trim().split('\n').slice(1).map(l => l.split(',')[0])
+  );
 }
 
 function appendRow(filePath, row) {
@@ -32,35 +35,39 @@ function appendRow(filePath, row) {
   fs.appendFileSync(filePath, row + '\n');
 }
 
-/* ── Parsing HTML ────────────────────────────────────── */
+/* ── Parse FDJ ───────────────────────────────────────── */
 
-function parseResultsPage(html) {
-  const draws = [];
-  const blocks = html.split(/data-draw-date=/);
+const MOIS = {
+  'janvier':1,'février':2,'mars':3,'avril':4,'mai':5,'juin':6,
+  'juillet':7,'août':8,'septembre':9,'octobre':10,'novembre':11,'décembre':12
+};
 
-  for (const block of blocks.slice(1)) {
-    const dateMatch = block.match(/^"(\d{4}-\d{2}-\d{2})"/);
-    if (!dateMatch) continue;
-    const date = dateMatch[1];
+function parseFrenchDate(str) {
+  const m = str.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+  if (!m) return null;
+  const day   = m[1].padStart(2, '0');
+  const month = String(MOIS[m[2].toLowerCase()] ?? 0).padStart(2, '0');
+  const year  = m[3];
+  if (month === '00') return null;
+  return `${year}-${month}-${day}`;
+}
 
-    const nums  = [];
-    const stars = [];
+function parseLatestDraw(html) {
+  const comboRe = /(\d{1,2})-(\d{1,2})-(\d{1,2})-(\d{1,2})-(\d{1,2})\s+et les deux étoiles[^,]*,\s+le\s+(\d{1,2})\s+et\s+le\s+(\d{1,2})/;
+  const comboMatch = html.match(comboRe);
 
-    const numRe  = /class="[^"]*ball-number[^"]*"[^>]*>(\d+)<\/li>/g;
-    const starRe = /class="[^"]*ball-star[^"]*"[^>]*>(\d+)<\/li>/g;
-    let m;
+  const dateRe = /(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+\d{1,2}\s+\w+\s+\d{4}/gi;
+  const dateMatches = [...html.matchAll(dateRe)];
 
-    while ((m = numRe.exec(block))  !== null && nums.length  < 5) nums.push(parseInt(m[1], 10));
-    while ((m = starRe.exec(block)) !== null && stars.length < 2) stars.push(parseInt(m[1], 10));
+  if (!comboMatch || dateMatches.length === 0) return null;
 
-    if (nums.length === 5 && stars.length === 2) {
-      nums.sort((a, b) => a - b);
-      stars.sort((a, b) => a - b);
-      draws.push({ date, nums, stars });
-    }
-  }
+  const date  = parseFrenchDate(dateMatches[0][0]);
+  if (!date) return null;
 
-  return draws;
+  const nums  = [1,2,3,4,5].map(i => parseInt(comboMatch[i], 10)).sort((a,b)=>a-b);
+  const stars = [6,7].map(i => parseInt(comboMatch[i], 10)).sort((a,b)=>a-b);
+
+  return { date, nums, stars };
 }
 
 /* ── Fetch avec retry ────────────────────────────────── */
@@ -84,37 +91,31 @@ async function fetchPage(url, retries = 3) {
 async function main() {
   const filePath      = path.resolve(DATA_FILE);
   const existingDates = readExistingDates(filePath);
-  const currentYear   = new Date().getFullYear();
 
   console.log(`Fichier cible     : ${filePath}`);
   console.log(`Tirages existants : ${existingDates.size}`);
+  console.log(`Source            : ${FDJ_RESULTS}`);
 
-  const url  = `${BASE_URL}/results-history-${currentYear}`;
-  console.log(`Scraping          : ${url}`);
+  const html = await fetchPage(FDJ_RESULTS);
+  const draw = parseLatestDraw(html);
 
-  const html  = await fetchPage(url);
-  const draws = parseResultsPage(html);
-
-  if (draws.length === 0) {
-    console.error('Aucun tirage extrait — structure HTML inattendue.');
+  if (!draw) {
+    const snippet = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 500);
+    console.error('Impossible de parser le dernier tirage.');
+    console.error('Extrait HTML brut :', snippet);
     process.exit(1);
   }
 
-  console.log(`Tirages trouvés sur la page : ${draws.length}`);
+  console.log(`Tirage trouvé     : ${draw.date} — ${draw.nums.join(',')} | ★${draw.stars.join(',')}`);
 
-  const sorted = draws.sort((a, b) => b.date.localeCompare(a.date));
-  let added = 0;
-
-  for (const draw of sorted) {
-    if (existingDates.has(draw.date)) continue;
-    const row = [draw.date, ...draw.nums, ...draw.stars].join(',');
-    appendRow(filePath, row);
-    console.log(`Nouveau tirage ajouté : ${row}`);
-    added++;
-    break;
+  if (existingDates.has(draw.date)) {
+    console.log('Tirage déjà présent — rien à faire.');
+    process.exit(0);
   }
 
-  if (added === 0) console.log('Données déjà à jour — aucun nouveau tirage.');
+  const row = [draw.date, ...draw.nums, ...draw.stars].join(',');
+  appendRow(filePath, row);
+  console.log(`Nouveau tirage ajouté : ${row}`);
 }
 
 main().catch(err => {
