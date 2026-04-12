@@ -22,9 +22,7 @@ jobs:
           node-version: '24'
 
       - name: Valider le CSV
-        run: |
-          cd scripts
-          node validate.js ../data/draws.csv
+        run: node scripts/validate.js data/draws.csv
 
       - name: Afficher les statistiques
         run: |

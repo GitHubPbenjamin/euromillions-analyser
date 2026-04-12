@@ -27,11 +27,9 @@ jobs:
 
       - name: Récupérer les résultats
         id: fetch
-        run: |
-          cd scripts
-          node fetch-results.js
+        run: node scripts/fetch-results.js
         env:
-          DATA_FILE: ../data/draws.csv
+          DATA_FILE: data/draws.csv
 
       - name: Vérifier s'il y a des changements
         id: check

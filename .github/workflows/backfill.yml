@@ -3,12 +3,12 @@ name: Backfill historique EuroMillions
 on:
   workflow_dispatch:
     inputs:
-      from_date:
-        description: 'Date de début (YYYY-MM-DD)'
+      from_year:
+        description: 'Année de début (ex: 2021)'
         required: false
-        default: '2021-01-01'
-      to_date:
-        description: 'Date de fin (YYYY-MM-DD, vide = aujourd''hui)'
+        default: '2021'
+      to_year:
+        description: 'Année de fin (ex: 2025, vide = année en cours)'
         required: false
         default: ''
       full_history:
@@ -33,17 +33,18 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: scripts/package.json
 
       - name: Lancer le backfill
         run: |
-          cd scripts
-          node backfill.js \
-            --from "${{ github.event.inputs.full_history == 'true' && '2004-02-13' || github.event.inputs.from_date }}" \
-            --to   "${{ github.event.inputs.to_date }}" \
+          FROM=${{ github.event.inputs.full_history == 'true' && '2004' || github.event.inputs.from_year }}
+          TO=${{ github.event.inputs.to_year || '' }}
+          if [ -z "$TO" ]; then
+            node scripts/backfill.js --from "$FROM"
+          else
+            node scripts/backfill.js --from "$FROM" --to "$TO"
+          fi
         env:
-          DATA_FILE: ../data/draws.csv
+          DATA_FILE: data/draws.csv
 
       - name: Commit
         run: |

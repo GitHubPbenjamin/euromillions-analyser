@@ -1,15 +1,28 @@
 /**
  * backfill.js
- * Télécharge tous les tirages entre deux dates et les ajoute à draws.csv.
- * Utilise le fetch natif de Node 24 — aucune dépendance externe.
+ * Scrape euro-millions.com pour récupérer tous les tirages entre deux années.
+ * Zéro dépendance externe — Node 24 natif uniquement.
  *
  * Usage :
- *   node backfill.js --from 2021-01-01 --to 2024-12-31
- *   node backfill.js --from 2004-02-13          (depuis le tout premier tirage)
+ *   node backfill.js --from 2021 --to 2025
+ *   node backfill.js --from 2004            (depuis le premier tirage)
  */
 
 import fs   from 'fs';
 import path from 'path';
+
+const BASE_URL   = 'https://www.euro-millions.com';
+const DATA_FILE  = process.env.DATA_FILE ?? '../data/draws.csv';
+const CSV_HEADER = 'date,n1,n2,n3,n4,n5,s1,s2';
+const DELAY_MS   = 1500;
+
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (compatible; euromillions-analyser/1.0)',
+  'Accept': 'text/html,application/xhtml+xml',
+  'Accept-Language': 'en-GB,en;q=0.9',
+};
+
+/* ── Args ────────────────────────────────────────────── */
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -24,14 +37,7 @@ function parseArgs() {
   return result;
 }
 
-const API_BASE  = 'https://euromillions.api.pedromealha.dev/v1';
-const DATA_FILE = process.env.DATA_FILE ?? '../data/draws.csv';
-const CSV_HEADER = 'date,n1,n2,n3,n4,n5,s1,s2';
-const DELAY_MS  = 300;   // pause entre requêtes pour ne pas surcharger l'API
-
-/* ── Helpers ───────────────────────────────────────────── */
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* ── Helpers CSV ─────────────────────────────────────── */
 
 function readExistingDates(filePath) {
   if (!fs.existsSync(filePath)) return new Set();
@@ -39,108 +45,119 @@ function readExistingDates(filePath) {
   return new Set(lines.slice(1).map(l => l.split(',')[0]));
 }
 
-function drawToRow(draw) {
-  const nums  = [...draw.numbers].sort((a, b) => a - b);
-  const stars = [...draw.stars].sort((a, b) => a - b);
-  return [draw.date, ...nums, ...stars].join(',');
-}
-
 function sortAndWrite(filePath, rows) {
-  rows.sort((a, b) => a.localeCompare(b));   // tri chronologique
-  const content = [CSV_HEADER, ...rows].join('\n') + '\n';
-  fs.writeFileSync(filePath, content, 'utf8');
+  rows.sort((a, b) => a.localeCompare(b));
+  fs.writeFileSync(filePath, [CSV_HEADER, ...rows].join('\n') + '\n', 'utf8');
 }
 
-/* ── Fetch avec retry ──────────────────────────────────── */
+/* ── Parsing HTML ────────────────────────────────────── */
 
-async function fetchWithRetry(url, retries = 3) {
+function parseResultsPage(html) {
+  const draws  = [];
+  const blocks = html.split(/data-draw-date=/);
+
+  for (const block of blocks.slice(1)) {
+    const dateMatch = block.match(/^"(\d{4}-\d{2}-\d{2})"/);
+    if (!dateMatch) continue;
+    const date  = dateMatch[1];
+    const nums  = [];
+    const stars = [];
+
+    const numRe  = /class="[^"]*ball-number[^"]*"[^>]*>(\d+)<\/li>/g;
+    const starRe = /class="[^"]*ball-star[^"]*"[^>]*>(\d+)<\/li>/g;
+    let m;
+
+    while ((m = numRe.exec(block))  !== null && nums.length  < 5) nums.push(parseInt(m[1], 10));
+    while ((m = starRe.exec(block)) !== null && stars.length < 2) stars.push(parseInt(m[1], 10));
+
+    if (nums.length === 5 && stars.length === 2) {
+      nums.sort((a, b) => a - b);
+      stars.sort((a, b) => a - b);
+      draws.push({ date, nums, stars });
+    }
+  }
+
+  return draws;
+}
+
+/* ── Fetch avec retry ────────────────────────────────── */
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function fetchPage(url, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: HEADERS });
       if (res.status === 429) {
-        console.warn(`Rate-limit (429) — attente 5s (tentative ${attempt})`);
-        await sleep(5000);
+        console.warn('Rate-limit (429) — attente 10s');
+        await sleep(10000);
         continue;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
+      return res.text();
     } catch (err) {
-      if (attempt === retries) throw err;
-      console.warn(`Erreur réseau, retry dans 2s (tentative ${attempt}): ${err.message}`);
-      await sleep(2000);
+      console.warn(`Tentative ${attempt}/${retries} : ${err.message}`);
+      if (attempt < retries) await sleep(3000 * attempt);
+      else throw err;
     }
   }
 }
 
-/* ── Collecte par année ────────────────────────────────── */
-
-async function fetchDrawsByYear(year) {
-  const data = await fetchWithRetry(`${API_BASE}/draws?year=${year}`);
-  return Array.isArray(data) ? data : (data.draws ?? data.results ?? []);
-}
-
-/* ── Main ──────────────────────────────────────────────── */
+/* ── Main ────────────────────────────────────────────── */
 
 async function main() {
-  const args     = parseArgs();
-  const fromDate = args.from ?? '2021-01-01';
-  const toDate   = args.to   ?? new Date().toISOString().slice(0, 10);
-  const filePath = path.resolve(DATA_FILE);
+  const args      = parseArgs();
+  const fromYear  = parseInt(args.from ?? new Date().getFullYear());
+  const toYear    = parseInt(args.to   ?? new Date().getFullYear());
+  const filePath  = path.resolve(DATA_FILE);
 
-  const fromYear = parseInt(fromDate.slice(0, 4));
-  const toYear   = parseInt(toDate.slice(0, 4));
-
-  console.log(`Backfill du ${fromDate} au ${toDate} (${fromYear}–${toYear})`);
+  console.log(`Backfill ${fromYear} → ${toYear}`);
   console.log(`Fichier cible : ${filePath}`);
 
   const existingDates = readExistingDates(filePath);
-  console.log(`Tirages déjà présents : ${existingDates.size}`);
-
   const allRows = existingDates.size > 0
     ? fs.readFileSync(filePath, 'utf8').trim().split('\n').slice(1)
     : [];
 
+  console.log(`Tirages déjà présents : ${existingDates.size}`);
+
   let added = 0;
-  let skipped = 0;
 
   for (let year = fromYear; year <= toYear; year++) {
-    console.log(`\nAnnée ${year}...`);
+    const url = `${BASE_URL}/results-history-${year}`;
+    console.log(`\nAnnée ${year} : ${url}`);
 
-    let draws;
+    let html;
     try {
-      draws = await fetchDrawsByYear(year);
+      html = await fetchPage(url);
     } catch (err) {
-      console.error(`  Impossible de récupérer ${year}: ${err.message}`);
+      console.error(`  Impossible de scraper ${year} : ${err.message}`);
       continue;
     }
 
-    console.log(`  ${draws.length} tirages reçus`);
+    const draws = parseResultsPage(html);
+    console.log(`  ${draws.length} tirages trouvés`);
 
     for (const draw of draws) {
-      const date = draw.date ?? draw.draw_date;
-      if (!date) continue;
-      if (date < fromDate || date > toDate) continue;
-      if (existingDates.has(date)) { skipped++; continue; }
-
-      const row = drawToRow({ ...draw, date });
+      if (existingDates.has(draw.date)) continue;
+      const row = [draw.date, ...draw.nums, ...draw.stars].join(',');
       allRows.push(row);
-      existingDates.add(date);
+      existingDates.add(draw.date);
       added++;
     }
 
-    await sleep(DELAY_MS);
+    if (year < toYear) await sleep(DELAY_MS);
   }
 
   if (added > 0) {
     sortAndWrite(filePath, allRows);
-    console.log(`\nTerminé. ${added} tirages ajoutés, ${skipped} déjà présents.`);
-    console.log(`Total dans le fichier : ${allRows.length} tirages.`);
+    console.log(`\nTerminé. ${added} tirages ajoutés. Total : ${allRows.length}`);
   } else {
-    console.log(`\nAucun nouveau tirage à ajouter (${skipped} déjà présents).`);
+    console.log('\nAucun nouveau tirage — données déjà à jour.');
   }
 }
 
 main().catch(err => {
-  console.error('Erreur fatale:', err.message);
+  console.error('Erreur fatale :', err.message);
   process.exit(1);
 });
