@@ -1,0 +1,72 @@
+name: Collecte des résultats EuroMillions
+
+on:
+  schedule:
+    - cron: '30 21 * * 2'   # Mardi 21h30 UTC (23h30 heure France)
+    - cron: '30 21 * * 5'   # Vendredi 21h30 UTC
+  workflow_dispatch:         # Déclenchement manuel possible
+
+permissions:
+  contents: write            # Nécessaire pour committer le CSV
+
+jobs:
+  fetch-and-update:
+    name: Récupérer le dernier tirage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scripts/package.json
+
+      - name: Installer les dépendances
+        run: |
+          cd scripts
+          npm ci
+
+      - name: Récupérer les résultats
+        id: fetch
+        run: |
+          cd scripts
+          node fetch-results.js
+        env:
+          DATA_FILE: ../data/draws.csv
+
+      - name: Vérifier s'il y a des changements
+        id: check
+        run: |
+          if git diff --quiet data/draws.csv; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Aucun nouveau tirage détecté."
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            LAST=$(tail -1 data/draws.csv | cut -d',' -f1)
+            echo "last_draw=$LAST" >> $GITHUB_OUTPUT
+            echo "Nouveau tirage détecté : $LAST"
+          fi
+
+      - name: Commit et push si nouveau tirage
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/draws.csv
+          git commit -m "chore(data): tirage du ${{ steps.check.outputs.last_draw }} [skip ci]"
+          git push
+
+      - name: Résumé du job
+        run: |
+          if [ "${{ steps.check.outputs.changed }}" == "true" ]; then
+            echo "### Nouveau tirage ajouté : ${{ steps.check.outputs.last_draw }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Aucun nouveau tirage — données déjà à jour" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "Lignes dans draws.csv : $(wc -l < data/draws.csv)" >> $GITHUB_STEP_SUMMARY

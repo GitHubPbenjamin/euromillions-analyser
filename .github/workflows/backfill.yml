@@ -1,0 +1,63 @@
+name: Backfill historique EuroMillions
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_date:
+        description: 'Date de début (YYYY-MM-DD)'
+        required: false
+        default: '2021-01-01'
+      to_date:
+        description: 'Date de fin (YYYY-MM-DD, vide = aujourd''hui)'
+        required: false
+        default: ''
+      full_history:
+        description: 'Télécharger tout depuis 2004 ?'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    name: Backfill des données historiques
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scripts/package.json
+
+      - name: Installer les dépendances
+        run: cd scripts && npm ci
+
+      - name: Lancer le backfill
+        run: |
+          cd scripts
+          node backfill.js \
+            --from "${{ github.event.inputs.full_history == 'true' && '2004-02-13' || github.event.inputs.from_date }}" \
+            --to   "${{ github.event.inputs.to_date }}" \
+        env:
+          DATA_FILE: ../data/draws.csv
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/draws.csv
+          git diff --staged --quiet || git commit -m "chore(data): backfill historique [skip ci]"
+          git push
+
+      - name: Résumé
+        run: |
+          COUNT=$(tail -n +2 data/draws.csv | wc -l)
+          echo "### Backfill terminé" >> $GITHUB_STEP_SUMMARY
+          echo "Total tirages en base : **$COUNT**" >> $GITHUB_STEP_SUMMARY

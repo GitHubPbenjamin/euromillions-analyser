@@ -1,0 +1,42 @@
+name: Validation du fichier de données
+
+on:
+  pull_request:
+    paths:
+      - 'data/draws.csv'
+  push:
+    branches: [main]
+    paths:
+      - 'data/draws.csv'
+
+jobs:
+  validate:
+    name: Valider draws.csv
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scripts/package.json
+
+      - name: Installer les dépendances
+        run: cd scripts && npm ci
+
+      - name: Valider le CSV
+        run: |
+          cd scripts
+          node validate.js ../data/draws.csv
+
+      - name: Afficher les statistiques
+        run: |
+          COUNT=$(tail -n +2 data/draws.csv | wc -l)
+          FIRST=$(sed -n '2p' data/draws.csv | cut -d',' -f1)
+          LAST=$(tail -1 data/draws.csv | cut -d',' -f1)
+          echo "### Statistiques draws.csv" >> $GITHUB_STEP_SUMMARY
+          echo "- Tirages : **$COUNT**" >> $GITHUB_STEP_SUMMARY
+          echo "- Premier : **$FIRST**" >> $GITHUB_STEP_SUMMARY
+          echo "- Dernier : **$LAST**" >> $GITHUB_STEP_SUMMARY
