@@ -130,6 +130,10 @@ async function main() {
 
       const draws = parseMonthPage(html);
       console.log(`${draws.length} tirages`);
+if (draws.length === 0 && year === fromYear && month === 1) {
+  const snippet = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 800);
+  console.log('DEBUG HTML:', snippet);
+}
 
       for (const draw of draws) {
         if (existingDates.has(draw.isoDate)) continue;
