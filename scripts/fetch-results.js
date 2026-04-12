@@ -1,9 +1,3 @@
-//**
- * fetch-results.js
- * Source : lesbonsnumeros.com — HTML statique, zéro JS requis.
- * Zéro dépendance externe — Node 24 natif uniquement.
- */
-
 import fs   from 'fs';
 import path from 'path';
 
@@ -23,8 +17,6 @@ const MOIS = {
   'juillet':7,'août':8,'septembre':9,'octobre':10,'novembre':11,'décembre':12
 };
 
-/* ── CSV ──────────────────────────────────────────────── */
-
 function readExistingDates(filePath) {
   if (!fs.existsSync(filePath)) return new Set();
   return new Set(
@@ -37,19 +29,7 @@ function appendRow(filePath, row) {
   fs.appendFileSync(filePath, row + '\n');
 }
 
-/* ── Parse ────────────────────────────────────────────── */
-
-/**
- * Extrait le premier bloc "Derniers tirages" de la page de liste.
- * Structure HTML :
- *   <h2><a>Euromillions Vendredi 10 Avril</a></h2>
- *   <ul><li>10</li><li>13</li>...<li>6</li><li>9</li></ul>
- *
- * On cherche l'URL du dernier tirage pour en extraire la date.
- * Pattern URL : rapports-tirage-{id}-{jour}-{DD}-{mois}-{YYYY}.htm
- */
 function parseListPage(html) {
-  // Trouver la première URL de tirage
   const urlRe = /rapports-tirage-\d+-\w+-(\d+)-(\w+)-(\d{4})\.htm/;
   const urlMatch = html.match(urlRe);
   if (!urlMatch) return null;
@@ -60,8 +40,6 @@ function parseListPage(html) {
   if (month === '00') return null;
   const date = `${year}-${month}-${day}`;
 
-  // Extraire les 7 numéros du premier bloc de résultat
-  // Les <li> contenant uniquement un nombre (1 ou 2 chiffres)
   const sectionStart = html.indexOf(urlMatch[0]);
   const section = html.slice(sectionStart, sectionStart + 1500);
 
@@ -80,8 +58,6 @@ function parseListPage(html) {
   return { date, nums, stars };
 }
 
-/* ── Fetch ────────────────────────────────────────────── */
-
 async function fetchPage(url, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -95,8 +71,6 @@ async function fetchPage(url, retries = 3) {
     }
   }
 }
-
-/* ── Main ─────────────────────────────────────────────── */
 
 async function main() {
   const filePath      = path.resolve(DATA_FILE);
