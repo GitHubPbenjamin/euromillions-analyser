@@ -1,27 +1,29 @@
-/**
+//**
  * fetch-results.js
- * Récupère le dernier tirage EuroMillions depuis fdj.fr
- * et l'ajoute à draws.csv si absent.
- *
- * Source : fdj.fr/jeux-de-tirage/euromillions-my-million/resultats
+ * Source : lesbonsnumeros.com — HTML statique, zéro JS requis.
  * Zéro dépendance externe — Node 24 natif uniquement.
  */
 
 import fs   from 'fs';
 import path from 'path';
 
-const FDJ_RESULTS = 'https://www.fdj.fr/jeux-de-tirage/euromillions-my-million/resultats';
-const DATA_FILE   = process.env.DATA_FILE ?? '../data/draws.csv';
-const CSV_HEADER  = 'date,n1,n2,n3,n4,n5,s1,s2';
+const BASE      = 'https://www.lesbonsnumeros.com';
+const LIST_URL  = `${BASE}/euromillions/resultats/`;
+const DATA_FILE = process.env.DATA_FILE ?? '../data/draws.csv';
+const CSV_HEADER = 'date,n1,n2,n3,n4,n5,s1,s2';
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept': 'text/html',
   'Accept-Language': 'fr-FR,fr;q=0.9',
-  'Cache-Control': 'no-cache',
 };
 
-/* ── CSV ─────────────────────────────────────────────── */
+const MOIS = {
+  'janvier':1,'février':2,'mars':3,'avril':4,'mai':5,'juin':6,
+  'juillet':7,'août':8,'septembre':9,'octobre':10,'novembre':11,'décembre':12
+};
+
+/* ── CSV ──────────────────────────────────────────────── */
 
 function readExistingDates(filePath) {
   if (!fs.existsSync(filePath)) return new Set();
@@ -35,42 +37,50 @@ function appendRow(filePath, row) {
   fs.appendFileSync(filePath, row + '\n');
 }
 
-/* ── Parse FDJ ───────────────────────────────────────── */
+/* ── Parse ────────────────────────────────────────────── */
 
-const MOIS = {
-  'janvier':1,'février':2,'mars':3,'avril':4,'mai':5,'juin':6,
-  'juillet':7,'août':8,'septembre':9,'octobre':10,'novembre':11,'décembre':12
-};
+/**
+ * Extrait le premier bloc "Derniers tirages" de la page de liste.
+ * Structure HTML :
+ *   <h2><a>Euromillions Vendredi 10 Avril</a></h2>
+ *   <ul><li>10</li><li>13</li>...<li>6</li><li>9</li></ul>
+ *
+ * On cherche l'URL du dernier tirage pour en extraire la date.
+ * Pattern URL : rapports-tirage-{id}-{jour}-{DD}-{mois}-{YYYY}.htm
+ */
+function parseListPage(html) {
+  // Trouver la première URL de tirage
+  const urlRe = /rapports-tirage-\d+-\w+-(\d+)-(\w+)-(\d{4})\.htm/;
+  const urlMatch = html.match(urlRe);
+  if (!urlMatch) return null;
 
-function parseFrenchDate(str) {
-  const m = str.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
-  if (!m) return null;
-  const day   = m[1].padStart(2, '0');
-  const month = String(MOIS[m[2].toLowerCase()] ?? 0).padStart(2, '0');
-  const year  = m[3];
+  const day   = urlMatch[1].padStart(2, '0');
+  const month = String(MOIS[urlMatch[2].toLowerCase()] ?? 0).padStart(2, '0');
+  const year  = urlMatch[3];
   if (month === '00') return null;
-  return `${year}-${month}-${day}`;
-}
+  const date = `${year}-${month}-${day}`;
 
-function parseLatestDraw(html) {
-  const comboRe = /(\d{1,2})-(\d{1,2})-(\d{1,2})-(\d{1,2})-(\d{1,2})\s+et les deux étoiles[^,]*,\s+le\s+(\d{1,2})\s+et\s+le\s+(\d{1,2})/;
-  const comboMatch = html.match(comboRe);
+  // Extraire les 7 numéros du premier bloc de résultat
+  // Les <li> contenant uniquement un nombre (1 ou 2 chiffres)
+  const sectionStart = html.indexOf(urlMatch[0]);
+  const section = html.slice(sectionStart, sectionStart + 1500);
 
-  const dateRe = /(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+\d{1,2}\s+\w+\s+\d{4}/gi;
-  const dateMatches = [...html.matchAll(dateRe)];
+  const numRe = /<li>(\d{1,2})<\/li>/g;
+  const found = [];
+  let m;
+  while ((m = numRe.exec(section)) !== null && found.length < 7) {
+    found.push(parseInt(m[1], 10));
+  }
 
-  if (!comboMatch || dateMatches.length === 0) return null;
+  if (found.length < 7) return null;
 
-  const date  = parseFrenchDate(dateMatches[0][0]);
-  if (!date) return null;
-
-  const nums  = [1,2,3,4,5].map(i => parseInt(comboMatch[i], 10)).sort((a,b)=>a-b);
-  const stars = [6,7].map(i => parseInt(comboMatch[i], 10)).sort((a,b)=>a-b);
+  const nums  = found.slice(0, 5).sort((a, b) => a - b);
+  const stars = found.slice(5, 7).sort((a, b) => a - b);
 
   return { date, nums, stars };
 }
 
-/* ── Fetch avec retry ────────────────────────────────── */
+/* ── Fetch ────────────────────────────────────────────── */
 
 async function fetchPage(url, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -86,7 +96,7 @@ async function fetchPage(url, retries = 3) {
   }
 }
 
-/* ── Main ────────────────────────────────────────────── */
+/* ── Main ─────────────────────────────────────────────── */
 
 async function main() {
   const filePath      = path.resolve(DATA_FILE);
@@ -94,15 +104,15 @@ async function main() {
 
   console.log(`Fichier cible     : ${filePath}`);
   console.log(`Tirages existants : ${existingDates.size}`);
-  console.log(`Source            : ${FDJ_RESULTS}`);
+  console.log(`Source            : ${LIST_URL}`);
 
-  const html = await fetchPage(FDJ_RESULTS);
-  const draw = parseLatestDraw(html);
+  const html = await fetchPage(LIST_URL);
+  const draw = parseListPage(html);
 
   if (!draw) {
-    const snippet = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 500);
+    const snippet = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 600);
     console.error('Impossible de parser le dernier tirage.');
-    console.error('Extrait HTML brut :', snippet);
+    console.error('Extrait :', snippet);
     process.exit(1);
   }
 
