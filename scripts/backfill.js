@@ -17,37 +17,33 @@ const MOIS_FR = [
   '','janvier','fevrier','mars','avril','mai','juin',
   'juillet','aout','septembre','octobre','novembre','decembre'
 ];
+
 const MOIS_ISO = {
   'janvier':1,'fevrier':2,'mars':3,'avril':4,'mai':5,'juin':6,
   'juillet':7,'aout':8,'septembre':9,'octobre':10,'novembre':11,'decembre':12
 };
 
-function removeDiacritics(str) {
-  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function removeDiacritics(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const result = {};
+  const r = {};
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--')) {
-      result[args[i].slice(2)] = args[i+1] ?? true;
-      i++;
-    }
+    if (args[i].startsWith('--')) { r[args[i].slice(2)] = args[i+1] ?? true; i++; }
   }
-  return result;
+  return r;
 }
 
 function readExistingDates(filePath) {
   if (!fs.existsSync(filePath)) return new Set();
-  return new Set(
-    fs.readFileSync(filePath, 'utf8').trim().split('\n').slice(1).map(l => l.split(',')[0])
-  );
+  return new Set(fs.readFileSync(filePath,'utf8').trim().split('\n').slice(1).map(l=>l.split(',')[0]));
 }
 
 function sortAndWrite(filePath, rows) {
-  rows.sort((a, b) => a.localeCompare(b));
-  fs.writeFileSync(filePath, [CSV_HEADER, ...rows].join('\n') + '\n', 'utf8');
+  rows.sort((a,b)=>a.localeCompare(b));
+  fs.writeFileSync(filePath, [CSV_HEADER,...rows].join('\n')+'\n','utf8');
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -60,7 +56,7 @@ async function fetchPage(url, retries = 3) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.text();
     } catch (err) {
-      console.warn(`  Tentative ${attempt}/${retries} : ${err.message}`);
+      console.warn(`  Retry ${attempt}/${retries}: ${err.message}`);
       if (attempt < retries) await sleep(3000 * attempt);
       else return null;
     }
@@ -70,31 +66,25 @@ async function fetchPage(url, retries = 3) {
 function parseMonthPage(html) {
   const draws = [];
 
-  // Chaque tirage a une URL du type rapports-tirage-{id}-{jour}-{DD}-{mois}-{YYYY}.htm
-  // suivie de 7 <li>nombre</li>
-  const blockRe = /rapports-tirage-\d+-\w+-(\d{1,2})-(\w+)-(\d{4})\.htm[\s\S]{0,800}?(<li>\d{1,2}<\/li>[\s\S]{0,400}?){7}/g;
-
-  // Approche plus simple : splitter par URL de tirage
+  // Trouver toutes les URLs de tirages individuels
+  // Pattern : rapports-tirage-{id}-{jour}-{dd}-{mois}-{yyyy}.htm
   const urlRe = /rapports-tirage-(\d+)-(\w+)-(\d{1,2})-(\w+)-(\d{4})\.htm/g;
-  const parts = html.split(urlRe);
+  let match;
 
-  // html.split avec groupe capturant donne : [avant, id, jour, dd, mois, yyyy, contenu, id, ...]
-  // stride de 6 (1 contenu + 5 groupes capturés)
-  for (let i = 1; i < parts.length; i += 6) {
-    const id   = parts[i];
-    const jour = parts[i+1];
-    const dd   = parts[i+2].padStart(2, '0');
-    const mois = removeDiacritics(parts[i+3].toLowerCase());
-    const yyyy = parts[i+4];
-    const bloc = parts[i+5] ?? '';
+  while ((match = urlRe.exec(html)) !== null) {
+    const dd   = match[3].padStart(2, '0');
+    const mois = removeDiacritics(match[4].toLowerCase());
+    const yyyy = match[5];
 
     const moisNum = MOIS_ISO[mois];
     if (!moisNum) continue;
     const isoDate = `${yyyy}-${String(moisNum).padStart(2,'0')}-${dd}`;
 
-    // Extraire les 7 premiers nombres du bloc suivant
-    const numRe = /<li>(\d{1,2})<\/li>/g;
-    const found = [];
+    // Extraire les 7 numéros qui suivent cette URL dans le HTML
+    const pos    = match.index + match[0].length;
+    const bloc   = html.slice(pos, pos + 600);
+    const numRe  = /<li>(\d{1,2})<\/li>/g;
+    const found  = [];
     let m;
     while ((m = numRe.exec(bloc)) !== null && found.length < 7) {
       found.push(parseInt(m[1], 10));
@@ -102,8 +92,8 @@ function parseMonthPage(html) {
 
     if (found.length < 7) continue;
 
-    const nums  = found.slice(0, 5).sort((a, b) => a - b);
-    const stars = found.slice(5, 7).sort((a, b) => a - b);
+    const nums  = found.slice(0,5).sort((a,b)=>a-b);
+    const stars = found.slice(5,7).sort((a,b)=>a-b);
     draws.push({ isoDate, nums, stars });
   }
 
@@ -117,33 +107,29 @@ async function main() {
   const filePath = path.resolve(DATA_FILE);
 
   console.log(`Backfill ${fromYear} → ${toYear}`);
-  console.log(`Fichier : ${filePath}`);
-
   const existingDates = readExistingDates(filePath);
   const allRows = existingDates.size > 0
-    ? fs.readFileSync(filePath, 'utf8').trim().split('\n').slice(1)
+    ? fs.readFileSync(filePath,'utf8').trim().split('\n').slice(1)
     : [];
-
   console.log(`Tirages existants : ${existingDates.size}`);
 
   let added = 0;
+  const now = new Date();
 
   for (let year = fromYear; year <= toYear; year++) {
     for (let month = 1; month <= 12; month++) {
-      // Ne pas aller dans le futur
-      const now = new Date();
       if (year > now.getFullYear()) break;
       if (year === now.getFullYear() && month > now.getMonth() + 1) break;
 
       const moisFr = MOIS_FR[month];
       const url    = `${BASE}/euromillions/resultats/tirages-${moisFr}-${year}.htm`;
-      console.log(`\n${moisFr} ${year} : ${url}`);
+      process.stdout.write(`${moisFr} ${year} : `);
 
       const html = await fetchPage(url);
-      if (!html) { console.log('  Page introuvable, ignoré.'); await sleep(DELAY_MS); continue; }
+      if (!html) { console.log('introuvable'); await sleep(DELAY_MS); continue; }
 
       const draws = parseMonthPage(html);
-      console.log(`  ${draws.length} tirages trouvés`);
+      console.log(`${draws.length} tirages`);
 
       for (const draw of draws) {
         if (existingDates.has(draw.isoDate)) continue;
@@ -151,7 +137,6 @@ async function main() {
         allRows.push(row);
         existingDates.add(draw.isoDate);
         added++;
-        console.log(`  + ${row}`);
       }
 
       await sleep(DELAY_MS);
@@ -160,13 +145,10 @@ async function main() {
 
   if (added > 0) {
     sortAndWrite(filePath, allRows);
-    console.log(`\nTerminé. ${added} tirages ajoutés. Total : ${allRows.length}`);
+    console.log(`\nTerminé : ${added} ajoutés, total ${allRows.length}`);
   } else {
-    console.log('\nAucun nouveau tirage à ajouter.');
+    console.log('\nAucun nouveau tirage.');
   }
 }
 
-main().catch(err => {
-  console.error('Erreur fatale :', err.message);
-  process.exit(1);
-});
+main().catch(err => { console.error('Erreur :', err.message); process.exit(1); });
