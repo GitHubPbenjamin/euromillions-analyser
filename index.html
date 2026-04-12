@@ -1,0 +1,16 @@
+const CSV_URL =
+  'https://cdn.jsdelivr.net/gh/GitHubPbenjamin/euromillions-analyser@main/data/draws.csv';
+
+async function loadDraws() {
+  const res  = await fetch(CSV_URL);
+  const text = await res.text();
+  return text.trim().split('\n').slice(1).map(line => {
+    const [date, n1, n2, n3, n4, n5, s1, s2] = line.split(',');
+    return {
+      date,
+      nums:  [n1,n2,n3,n4,n5].map(Number),
+      stars: [s1,s2].map(Number),
+      quarter: `${date.slice(0,4)}-T${Math.ceil(+date.slice(5,7)/3)}`
+    };
+  });
+}
