@@ -4,15 +4,26 @@
   "description": "Scripts de collecte des résultats EuroMillions",
   "type": "module",
   "scripts": {
-    "fetch":    "node fetch-results.js",
+    "fetch": "node fetch-results.js",
     "backfill": "node backfill.js",
     "validate": "node validate.js ../data/draws.csv"
   },
-  "dependencies": {},
   "devDependencies": {
     "minimist": "^1.2.8"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GitHubPbenjamin/euromillions-analyser.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/GitHubPbenjamin/euromillions-analyser/issues"
+  },
+  "homepage": "https://github.com/GitHubPbenjamin/euromillions-analyser#readme"
 }
