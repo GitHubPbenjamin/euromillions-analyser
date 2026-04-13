@@ -62,4 +62,419 @@
     .crit-warn{background:#fef3c7;color:#92400e}
     .crit-bad{background:#fee2e2;color:#991b1b}
     .loading{text-align:center;padding:3rem;color:#888}
-    select
+    select{padding:5px 8px;font-size:13px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#333}
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>EuroMillions Analyser</h1>
+  <div id="loading" class="loading">Chargement des données FDJ...</div>
+  <div id="main" style="display:none">
+    <nav class="nav">
+      <button class="nav-btn active" onclick="showSection('dashboard',this)">Tableau de bord</button>
+      <button class="nav-btn" onclick="showSection('numeros',this)">Numéros</button>
+      <button class="nav-btn" onclick="showSection('etoiles',this)">Étoiles</button>
+      <button class="nav-btn" onclick="showSection('tendances',this)">Tendances</button>
+      <button class="nav-btn" onclick="showSection('paires',this)">Paires</button>
+      <button class="nav-btn" onclick="showSection('overdue',this)">Chauds / Froids</button>
+      <button class="nav-btn" onclick="showSection('generateur',this)">Générateur</button>
+      <button class="nav-btn special" onclick="showSection('evaluateur',this)">Évaluateur ★</button>
+    </nav>
+
+    <div id="dashboard" class="section active">
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">Tirages analysés</div><div class="metric-val" id="m-tirages">—</div></div>
+        <div class="metric"><div class="metric-label">Période</div><div class="metric-val" style="font-size:13px;line-height:1.5" id="m-periode">—</div></div>
+        <div class="metric"><div class="metric-label">N° le + fréquent</div><div class="metric-val" id="m-top1">—</div></div>
+        <div class="metric"><div class="metric-label">Étoile la + fréquente</div><div class="metric-val" id="m-topstar">—</div></div>
+      </div>
+      <div class="card"><div class="card-title">Top 5 numéros</div><div id="dash-top5"></div></div>
+      <div class="card"><div class="card-title">Fréquence par décade</div><div style="position:relative;height:220px"><canvas id="dashDecadeChart"></canvas></div></div>
+    </div>
+
+    <div id="numeros" class="section">
+      <div class="card">
+        <div class="card-title">Heatmap des 50 numéros</div>
+        <div class="legend">
+          <span class="leg-item"><span class="leg-sq" style="background:#dbeafe"></span>Rare</span>
+          <span class="leg-item"><span class="leg-sq" style="background:#60a5fa"></span>Moyen</span>
+          <span class="leg-item"><span class="leg-sq" style="background:#1d4ed8"></span>Fréquent</span>
+          <span class="leg-item"><span class="leg-sq" style="background:#1e3a8a"></span>Très fréquent</span>
+        </div>
+        <div class="heatmap" id="heatmap"></div>
+      </div>
+      <div class="card"><div class="card-title">Fréquence des 50 numéros</div><div style="position:relative;height:300px"><canvas id="numChart"></canvas></div></div>
+    </div>
+
+    <div id="etoiles" class="section">
+      <div class="card"><div class="card-title">Fréquence des 12 étoiles</div><div id="star-bars"></div></div>
+      <div class="card"><div class="card-title">Visualisation</div><div style="display:flex;flex-wrap:wrap;gap:10px;padding:.5rem 0" id="star-viz"></div></div>
+    </div>
+
+    <div id="tendances" class="section">
+      <div class="card">
+        <div class="card-title">Évolution trimestrielle</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">
+          <label style="font-size:13px;color:#666">Numéro</label>
+          <select id="tendNum" onchange="updateTendances()"></select>
+        </div>
+        <div style="position:relative;height:260px"><canvas id="tendChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Comparaison 3 numéros</div>
+        <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
+          <select id="cmpA" onchange="updateComparaison()"></select>
+          <select id="cmpB" onchange="updateComparaison()"></select>
+          <select id="cmpC" onchange="updateComparaison()"></select>
+        </div>
+        <div style="position:relative;height:260px"><canvas id="cmpChart"></canvas></div>
+      </div>
+    </div>
+
+    <div id="paires" class="section">
+      <div class="card"><div class="card-title">Top 15 paires</div><div id="pairs-list"></div></div>
+      <div class="card"><div class="card-title">Top 10 triplets</div><div id="triplets-list"></div></div>
+    </div>
+
+    <div id="overdue" class="section">
+      <div class="card"><div class="card-title">Numéros chauds</div><div id="hot-list"></div></div>
+      <div class="card"><div class="card-title">Numéros froids</div><div id="cold-list"></div></div>
+    </div>
+
+    <div id="generateur" class="section">
+      <div class="card">
+        <div class="card-title">Générateur de grille</div>
+        <div style="margin-bottom:1rem">
+          <button class="btn btn-primary" onclick="generateGrid('weighted')">Pondérée par fréquences</button>
+          <button class="btn" onclick="generateGrid('balanced')">Équilibrée</button>
+          <button class="btn" onclick="generateGrid('random')">Aléatoire</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:1rem 0;align-items:center" id="gen-result"><span style="font-size:13px;color:#999">Choisissez un mode</span></div>
+        <div id="gen-info" style="font-size:12px;color:#999;margin-top:4px"></div>
+      </div>
+      <div class="card"><div class="card-title">Statistiques de la grille</div><div id="gen-stats" style="font-size:13px;color:#888">Générez une grille pour voir ses statistiques.</div></div>
+    </div>
+
+    <div id="evaluateur" class="section">
+      <div class="card">
+        <div class="card-title">Sélectionnez 5 numéros</div>
+        <div class="num-picker" id="numPicker"></div>
+        <div class="card-title" style="margin-top:.5rem">Sélectionnez 2 étoiles</div>
+        <div class="star-picker" id="starPicker"></div>
+        <div style="margin-bottom:.75rem">
+          <div style="font-size:12px;color:#888;margin-bottom:6px">Grille sélectionnée</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;min-height:44px;align-items:center" id="selectedDisplay"></div>
+        </div>
+        <button class="btn btn-primary" onclick="evalGrid()">Évaluer ma grille</button>
+        <button class="btn" onclick="resetEval()">Réinitialiser</button>
+      </div>
+      <div id="eval-result" style="display:none">
+        <div class="card">
+          <div class="card-title">Score global</div>
+          <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap">
+            <div style="text-align:center">
+              <svg width="110" height="110" viewBox="0 0 110 110">
+                <circle cx="55" cy="55" r="46" fill="none" stroke="#f0f0f0" stroke-width="10"/>
+                <circle cx="55" cy="55" r="46" fill="none" id="scoreArc" stroke="#1a6fd4" stroke-width="10" stroke-linecap="round" stroke-dasharray="289 289" stroke-dashoffset="289" transform="rotate(-90 55 55)"/>
+                <text x="55" y="60" text-anchor="middle" font-size="22" font-weight="600" fill="#1a6fd4" id="scoreText">—</text>
+              </svg>
+              <div style="font-size:13px;color:#888;margin-top:4px" id="scoreVerdict">—</div>
+            </div>
+            <div style="flex:1;min-width:200px;position:relative;height:200px"><canvas id="radarChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card"><div class="card-title">Détail des critères</div><div id="crit-details"></div></div>
+        <div class="card"><div class="card-title">Historique de cette grille</div><div id="hist-result"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CSV_URL = 'https://cdn.jsdelivr.net/gh/githubpbenjamin/euromillions-analyser@main/data/draws.csv';
+let DRAWS=[],nf=[],sf=[],overdue=[],allQuarters=[],pairs=[],trips=[];
+let tendChart=null,cmpChart=null,radarChartInst=null,selNums=[],selStars=[];
+
+async function loadData(){
+  const res=await fetch(CSV_URL+'?t='+Date.now());
+  const text=await res.text();
+  const rows=text.trim().split('\n').slice(1).filter(l=>l.trim());
+  DRAWS=rows.map(line=>{
+    const [date,n1,n2,n3,n4,n5,s1,s2]=line.split(',');
+    return{date,nums:[n1,n2,n3,n4,n5].map(Number),stars:[s1,s2].map(Number),quarter:`${date.slice(0,4)}-T${Math.ceil(+date.slice(5,7)/3)}`};
+  });
+  if(DRAWS.length===0)throw new Error('CSV vide — lancez le backfill FDJ dans GitHub Actions.');
+}
+
+function calcFreq(){
+  nf=Array(51).fill(0);sf=Array(13).fill(0);
+  DRAWS.forEach(d=>{d.nums.forEach(n=>nf[n]++);d.stars.forEach(s=>sf[s]++);});
+}
+
+function calcPairs(){
+  const pm={},tm={};
+  DRAWS.forEach(d=>{
+    const ns=d.nums;
+    for(let i=0;i<ns.length;i++)for(let j=i+1;j<ns.length;j++){const k=`${ns[i]}-${ns[j]}`;pm[k]=(pm[k]||0)+1;}
+    for(let i=0;i<ns.length;i++)for(let j=i+1;j<ns.length;j++)for(let k=j+1;k<ns.length;k++){const key=`${ns[i]}-${ns[j]}-${ns[k]}`;tm[key]=(tm[key]||0)+1;}
+  });
+  pairs=Object.entries(pm).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  trips=Object.entries(tm).sort((a,b)=>b[1]-a[1]).slice(0,10);
+}
+
+function calcOverdue(){
+  const last=Array(51).fill(null);
+  DRAWS.forEach((d,i)=>d.nums.forEach(n=>last[n]=i));
+  overdue=last.map((ls,i)=>({n:i,gap:ls===null?DRAWS.length:DRAWS.length-1-ls})).slice(1);
+}
+
+function getHeatColor(f,mn,mx){
+  const t=(f-mn)/(mx-mn||1);
+  if(t<0.25)return{bg:'#dbeafe',color:'#1e40af'};
+  if(t<0.5)return{bg:'#60a5fa',color:'#1e3a8a'};
+  if(t<0.75)return{bg:'#1d4ed8',color:'#eff6ff'};
+  return{bg:'#1e3a8a',color:'#bfdbfe'};
+}
+
+function showSection(id,btn){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+
+function initDashboard(){
+  document.getElementById('m-tirages').textContent=DRAWS.length;
+  const fmt=d=>new Date(d).toLocaleDateString('fr-FR',{month:'short',year:'numeric'});
+  document.getElementById('m-periode').textContent=`${fmt(DRAWS[0].date)} — ${fmt(DRAWS[DRAWS.length-1].date)}`;
+  document.getElementById('m-top1').textContent=`N° ${nf.indexOf(Math.max(...nf.slice(1)))}`;
+  document.getElementById('m-topstar').textContent=`★ ${sf.indexOf(Math.max(...sf.slice(1)))}`;
+  const sorted=nf.slice(1).map((v,i)=>({n:i+1,v})).sort((a,b)=>b.v-a.v).slice(0,5);
+  const max5=sorted[0].v;
+  document.getElementById('dash-top5').innerHTML=sorted.map(({n,v})=>
+    `<div class="bar-row"><div class="bar-label">${n}</div><div class="bar-track"><div class="bar-fill" style="width:${v/max5*100}%;background:#1a6fd4"></div></div><div class="bar-val">${v}×</div></div>`
+  ).join('');
+  const decades=['1–10','11–20','21–30','31–40','41–50'];
+  const dfreq=decades.map((_,i)=>{let s=0;for(let n=i*10+1;n<=i*10+10;n++)s+=nf[n];return s;});
+  new Chart(document.getElementById('dashDecadeChart'),{type:'bar',data:{labels:decades,datasets:[{label:'Apparitions',data:dfreq,backgroundColor:['#dbeafe','#93c5fd','#60a5fa','#1d4ed8','#1e3a8a'],borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+}
+
+function initHeatmap(){
+  const vals=nf.slice(1),mn=Math.min(...vals),mx=Math.max(...vals);
+  document.getElementById('heatmap').innerHTML=Array.from({length:50},(_,i)=>{
+    const{bg,color}=getHeatColor(nf[i+1],mn,mx);
+    return`<div class="ball" style="background:${bg};color:${color}" title="N°${i+1}: ${nf[i+1]}×">${i+1}</div>`;
+  }).join('');
+}
+
+function initNumChart(){
+  new Chart(document.getElementById('numChart'),{type:'bar',data:{labels:Array.from({length:50},(_,i)=>String(i+1)),datasets:[{label:'Fréquence',data:nf.slice(1),backgroundColor:'#1a6fd4',borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},maxRotation:0}},y:{beginAtZero:true}}}});
+}
+
+function initStarBars(){
+  const max=Math.max(...sf.slice(1));
+  document.getElementById('star-bars').innerHTML=Array.from({length:12},(_,i)=>{
+    const s=i+1,pct=Math.round(sf[s]/DRAWS.length*100);
+    return`<div class="bar-row"><div class="bar-label">${s}</div><div class="bar-track"><div class="bar-fill" style="width:${sf[s]/max*100}%;background:#f59e0b"></div></div><div class="bar-val">${sf[s]} (${pct}%)</div></div>`;
+  }).join('');
+  const sfmax=Math.max(...sf.slice(1)),sfmin=Math.min(...sf.slice(1));
+  document.getElementById('star-viz').innerHTML=Array.from({length:12},(_,i)=>{
+    const s=i+1,t=(sf[s]-sfmin)/(sfmax-sfmin||1);
+    const bg=t<0.4?'#fef3c7':t<0.7?'#fcd34d':'#f59e0b',col=t<0.4?'#92400e':'#451a03';
+    return`<div style="text-align:center"><div style="width:38px;height:38px;border-radius:50%;background:${bg};color:${col};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">★${s}</div><div style="font-size:10px;color:#888;margin-top:2px">${sf[s]}×</div></div>`;
+  }).join('');
+}
+
+function initPairs(){
+  document.getElementById('pairs-list').innerHTML=pairs.map(([k,v])=>
+    `<div class="pair-row">${k.split('-').map(n=>`<div class="pball">${n}</div>`).join('')}<span style="font-size:12px;color:#888;margin-left:auto">${v} fois</span></div>`
+  ).join('');
+  document.getElementById('triplets-list').innerHTML=trips.map(([k,v])=>
+    `<div class="pair-row">${k.split('-').map(n=>`<div class="pball">${n}</div>`).join('')}<span style="font-size:12px;color:#888;margin-left:auto">${v} fois</span></div>`
+  ).join('');
+}
+
+function initOverdue(){
+  const sorted=[...overdue].sort((a,b)=>a.gap-b.gap);
+  const fmt=({n,gap})=>{const last=DRAWS[DRAWS.length-1-gap]?.date;return`<div class="overdue-row"><strong>${n}</strong><span style="font-size:12px;color:#888">${last?new Date(last).toLocaleDateString('fr-FR'):''}</span><span class="badge ${gap<10?'badge-hot':'badge-cold'}">${gap<10?'Chaud':'Froid'} (${gap})</span></div>`;};
+  document.getElementById('hot-list').innerHTML=sorted.slice(0,10).map(fmt).join('');
+  document.getElementById('cold-list').innerHTML=sorted.slice(-10).reverse().map(fmt).join('');
+}
+
+function initTendances(){
+  allQuarters=[...new Set(DRAWS.map(d=>d.quarter))].sort();
+  ['tendNum','cmpA','cmpB','cmpC'].forEach(id=>{
+    const s=document.getElementById(id);
+    for(let n=1;n<=50;n++){const o=document.createElement('option');o.value=n;o.textContent=n;s.appendChild(o);}
+  });
+  document.getElementById('cmpA').value=7;
+  document.getElementById('cmpB').value=23;
+  document.getElementById('cmpC').value=40;
+  updateTendances();updateComparaison();
+}
+
+function getQData(num){return allQuarters.map(q=>DRAWS.filter(d=>d.quarter===q&&d.nums.includes(+num)).length);}
+
+function updateTendances(){
+  const num=+document.getElementById('tendNum').value;
+  if(tendChart)tendChart.destroy();
+  tendChart=new Chart(document.getElementById('tendChart'),{type:'line',data:{labels:allQuarters,datasets:[{label:`N° ${num}`,data:getQData(num),borderColor:'#1a6fd4',backgroundColor:'#dbeafe',tension:.3,pointRadius:3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+}
+
+function updateComparaison(){
+  const na=+document.getElementById('cmpA').value,nb=+document.getElementById('cmpB').value,nc=+document.getElementById('cmpC').value;
+  if(cmpChart)cmpChart.destroy();
+  cmpChart=new Chart(document.getElementById('cmpChart'),{type:'line',data:{labels:allQuarters,datasets:[{label:`N° ${na}`,data:getQData(na),borderColor:'#1a6fd4',tension:.3,pointRadius:2},{label:`N° ${nb}`,data:getQData(nb),borderColor:'#16a34a',tension:.3,pointRadius:2},{label:`N° ${nc}`,data:getQData(nc),borderColor:'#dc2626',tension:.3,pointRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{boxWidth:10,font:{size:12}}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+}
+
+function generateGrid(mode){
+  let nums=[];
+  const weights=nf.slice(1).map((v,i)=>({n:i+1,v}));
+  if(mode==='weighted'){
+    const total=weights.reduce((s,w)=>s+w.v,0);
+    while(nums.length<5){let r=Math.random()*total,acc=0;for(const w of weights){acc+=w.v;if(r<=acc&&!nums.includes(w.n)){nums.push(w.n);break;}}}
+  }else if(mode==='balanced'){
+    const s1=[...weights].sort((a,b)=>b.v-a.v).slice(0,15).map(w=>w.n);
+    const s2=[...weights].sort((a,b)=>a.v-b.v).slice(0,15).map(w=>w.n);
+    const pool=[...s1,...s2];
+    while(nums.length<5){const n=pool[Math.floor(Math.random()*pool.length)];if(!nums.includes(n))nums.push(n);}
+  }else{
+    while(nums.length<5){const n=Math.floor(Math.random()*50)+1;if(!nums.includes(n))nums.push(n);}
+  }
+  nums.sort((a,b)=>a-b);
+  const stars=[];
+  while(stars.length<2){const s=Math.floor(Math.random()*12)+1;if(!stars.includes(s))stars.push(s);}
+  stars.sort((a,b)=>a-b);
+  document.getElementById('gen-result').innerHTML=
+    nums.map(n=>`<div class="gen-ball gen-num">${n}</div>`).join('')+
+    '<span style="font-size:12px;color:#999;margin:0 6px">+</span>'+
+    stars.map(s=>`<div class="gen-ball gen-star">★${s}</div>`).join('');
+  document.getElementById('gen-info').textContent=`Mode : ${mode==='weighted'?'Pondérée':mode==='balanced'?'Équilibrée':'Aléatoire'}`;
+  const avgFreq=Math.round(nums.reduce((s,n)=>s+nf[n],0)/5);
+  const maxGap=Math.max(...nums.map(n=>overdue.find(o=>o.n===n)?.gap||0));
+  document.getElementById('gen-stats').innerHTML=
+    `<div class="bar-row" style="margin-bottom:8px"><span style="font-size:13px;color:#666">Fréquence moyenne :</span><strong style="margin-left:8px">${avgFreq} tirages</strong></div>`+
+    `<div class="bar-row"><span style="font-size:13px;color:#666">N° le plus froid :</span><strong style="margin-left:8px">${maxGap} tirages d'absence</strong></div>`;
+}
+
+function initEvaluateur(){
+  document.getElementById('numPicker').innerHTML=Array.from({length:50},(_,i)=>
+    `<div class="pick-ball" id="pb${i+1}" onclick="toggleNum(${i+1})">${i+1}</div>`).join('');
+  document.getElementById('starPicker').innerHTML=Array.from({length:12},(_,i)=>
+    `<div class="pick-star" id="ps${i+1}" onclick="toggleStar(${i+1})">★${i+1}</div>`).join('');
+  updateSelectedDisplay();
+}
+
+function toggleNum(n){
+  if(selNums.includes(n)){selNums=selNums.filter(x=>x!==n);document.getElementById('pb'+n).classList.remove('selected');}
+  else if(selNums.length<5){selNums.push(n);document.getElementById('pb'+n).classList.add('selected');}
+  if(selNums.length===5){for(let i=1;i<=50;i++)if(!selNums.includes(i))document.getElementById('pb'+i).classList.add('disabled');}
+  else{for(let i=1;i<=50;i++)document.getElementById('pb'+i).classList.remove('disabled');}
+  updateSelectedDisplay();
+}
+
+function toggleStar(s){
+  if(selStars.includes(s)){selStars=selStars.filter(x=>x!==s);document.getElementById('ps'+s).classList.remove('selected');}
+  else if(selStars.length<2){selStars.push(s);document.getElementById('ps'+s).classList.add('selected');}
+  updateSelectedDisplay();
+}
+
+function updateSelectedDisplay(){
+  const ns=[...selNums].sort((a,b)=>a-b),ss=[...selStars].sort((a,b)=>a-b);
+  document.getElementById('selectedDisplay').innerHTML=
+    Array.from({length:5},(_,i)=>ns[i]?`<div class="sel-ball sel-num">${ns[i]}</div>`:'<div class="sel-empty"></div>').join('')+
+    '<span style="font-size:12px;color:#999;margin:0 6px">+</span>'+
+    Array.from({length:2},(_,i)=>ss[i]?`<div class="sel-ball sel-star">★${ss[i]}</div>`:'<div class="sel-empty"></div>').join('');
+}
+
+function resetEval(){
+  selNums=[];selStars=[];
+  for(let i=1;i<=50;i++){const b=document.getElementById('pb'+i);if(b)b.className='pick-ball';}
+  for(let s=1;s<=12;s++){const b=document.getElementById('ps'+s);if(b)b.className='pick-star';}
+  updateSelectedDisplay();
+  document.getElementById('eval-result').style.display='none';
+}
+
+function evalGrid(){
+  if(selNums.length!==5||selStars.length!==2){alert('Sélectionnez 5 numéros et 2 étoiles.');return;}
+  const nums=[...selNums].sort((a,b)=>a-b),stars=[...selStars].sort((a,b)=>a-b);
+  const avgFreq=DRAWS.length*5/50;
+  const avgNF=nums.map(n=>nf[n]).reduce((s,v)=>s+v,0)/5;
+  const sum=nums.reduce((s,n)=>s+n,0);
+  const evens=nums.filter(n=>n%2===0).length;
+  const lows=nums.filter(n=>n<=25).length;
+  let maxC=1,cur=1;
+  for(let i=1;i<nums.length;i++){if(nums[i]===nums[i-1]+1)cur++;else cur=1;if(cur>maxC)maxC=cur;}
+  const avgGap=nums.map(n=>overdue.find(o=>o.n===n)?.gap||0).reduce((s,v)=>s+v,0)/5;
+  const tg=DRAWS.length/50*5;
+  const scores={
+    freq:Math.round(Math.min(100,avgNF/avgFreq*100)),
+    sum:sum>=95&&sum<=175?100:sum>=80&&sum<=190?70:sum>=65&&sum<=210?40:15,
+    paire:(evens===2||evens===3)?100:(evens===1||evens===4)?55:20,
+    range:(lows===2||lows===3)?100:(lows===1||lows===4)?55:20,
+    consec:maxC<=2?100:maxC===3?60:20,
+    gap:Math.round(Math.max(10,100-Math.abs(avgGap-tg)/tg*80)),
+    star:Math.round(Math.min(100,stars.reduce((s,st)=>s+sf[st],0)/2/(DRAWS.length*2/12)*100))
+  };
+  const global=Math.round(scores.freq*.20+scores.sum*.18+scores.paire*.15+scores.range*.15+scores.consec*.12+scores.gap*.12+scores.star*.08);
+  const c=2*Math.PI*46;
+  const arc=document.getElementById('scoreArc');
+  arc.setAttribute('stroke-dasharray',String(c));
+  arc.setAttribute('stroke-dashoffset',String(c*(1-global/100)));
+  const col=global>=70?'#16a34a':global>=45?'#f59e0b':'#dc2626';
+  arc.setAttribute('stroke',col);
+  document.getElementById('scoreText').textContent=global;
+  document.getElementById('scoreText').setAttribute('fill',col);
+  document.getElementById('scoreVerdict').textContent=global>=75?'Excellente grille':global>=60?'Bonne grille':global>=45?'Grille moyenne':'Grille déséquilibrée';
+  if(radarChartInst)radarChartInst.destroy();
+  radarChartInst=new Chart(document.getElementById('radarChart'),{type:'radar',data:{labels:['Fréquence','Somme','Pairs/Impairs','Bas/Haut','Consécutifs','Écart','Étoiles'],datasets:[{label:'Votre grille',data:Object.values(scores),backgroundColor:'rgba(26,111,212,.15)',borderColor:'#1a6fd4',pointBackgroundColor:'#1a6fd4',pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{r:{beginAtZero:true,max:100,ticks:{stepSize:25,font:{size:10}},pointLabels:{font:{size:11}}}}}});
+  const crits=[
+    {label:`Fréquence moyenne : ${Math.round(avgNF)} tirages (attendu ~${Math.round(avgFreq)})`,score:scores.freq},
+    {label:`Somme : ${sum} (idéal 95–175)`,score:scores.sum},
+    {label:`Pairs / Impairs : ${evens} / ${5-evens} (idéal 2/3 ou 3/2)`,score:scores.paire},
+    {label:`Bas (1–25) / Haut (26–50) : ${lows} / ${5-lows}`,score:scores.range},
+    {label:`Max consécutifs : ${maxC}`,score:scores.consec},
+    {label:`Écart moyen : ${Math.round(avgGap)} tirages`,score:scores.gap},
+    {label:`Étoiles ★${stars[0]} (${sf[stars[0]]}×) + ★${stars[1]} (${sf[stars[1]]}×)`,score:scores.star},
+  ];
+  document.getElementById('crit-details').innerHTML=crits.map(c=>{
+    const cls=c.score>=70?'crit-good':c.score>=45?'crit-warn':'crit-bad';
+    const icon=c.score>=70?'✓':c.score>=45?'~':'✗';
+    return`<div class="crit-row"><div class="crit-icon ${cls}">${icon}</div><div style="flex:1;font-size:13px">${c.label}</div><div style="font-size:13px;font-weight:600;color:#888;margin-left:auto">${c.score}/100</div></div>`;
+  }).join('');
+  let m2=0,m3=0,m4=0,m5=0,mAll=0;
+  DRAWS.forEach(d=>{
+    const nm=nums.filter(n=>d.nums.includes(n)).length,sm=stars.filter(s=>d.stars.includes(s)).length;
+    if(nm>=2)m2++;if(nm>=3)m3++;if(nm>=4)m4++;if(nm===5){m5++;if(sm===2)mAll++;}
+  });
+  document.getElementById('hist-result').innerHTML=`
+    <div class="metrics" style="margin-bottom:0">
+      <div class="metric"><div class="metric-label">2+ numéros</div><div class="metric-val">${m2}</div></div>
+      <div class="metric"><div class="metric-label">3+ numéros</div><div class="metric-val">${m3}</div></div>
+      <div class="metric"><div class="metric-label">4+ numéros</div><div class="metric-val">${m4}</div></div>
+      <div class="metric"><div class="metric-label">5 numéros</div><div class="metric-val">${m5}</div></div>
+      <div class="metric"><div class="metric-label">Jackpot (5+2★)</div><div class="metric-val">${mAll}</div></div>
+    </div>`;
+  document.getElementById('eval-result').style.display='block';
+}
+
+async function init(){
+  try{
+    await loadData();
+    calcFreq();calcPairs();calcOverdue();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('main').style.display='block';
+    initDashboard();initHeatmap();initNumChart();
+    initStarBars();initPairs();initOverdue();
+    initTendances();initEvaluateur();
+  }catch(err){
+    document.getElementById('loading').innerHTML=
+      `<span style="color:#dc2626">Erreur : ${err.message}</span><br><br>
+       Lance le workflow <strong>Backfill</strong> dans GitHub Actions pour remplir <code>data/draws.csv</code>.`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
