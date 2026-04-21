@@ -8,8 +8,8 @@ const CSV_HEADER = 'date,n1,n2,n3,n4,n5,s1,s2';
 
 // URLs officielles FDJ — deux fichiers couvrent tout l'historique
 const ZIP_URLS = [
-  'https://media.fdj.fr/static/csv/euromillions/euromillions_200402.zip',
-  'https://media.fdj.fr/static/csv/euromillions/euromillions_202002.zip',
+  'https://cdn-media.fdj.fr/static-draws/csv/euromillions/euromillions_200402.zip',
+  'https://cdn-media.fdj.fr/static-draws/csv/euromillions/euromillions_202002.zip',
 ];
 
 const HEADERS = {
