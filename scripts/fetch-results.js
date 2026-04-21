@@ -4,7 +4,7 @@ import zlib from 'zlib';
 
 const DATA_FILE  = process.env.DATA_FILE ?? '../data/draws.csv';
 const CSV_HEADER = 'date,n1,n2,n3,n4,n5,s1,s2';
-const ZIP_URL    = 'https://media.fdj.fr/static/csv/euromillions/euromillions_202002.zip';
+const ZIP_URL = 'https://cdn-media.fdj.fr/static-draws/csv/euromillions/euromillions_202002.zip';
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0',
