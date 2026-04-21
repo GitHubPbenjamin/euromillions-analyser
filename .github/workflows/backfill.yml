@@ -1,0 +1,61 @@
+name: Backfill historique EuroMillions
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_year:
+        description: 'Année de début (ex: 2021)'
+        required: false
+        default: '2021'
+      to_year:
+        description: 'Année de fin (ex: 2025, vide = année en cours)'
+        required: false
+        default: ''
+      full_history:
+        description: 'Télécharger tout depuis 2004 ?'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    name: Backfill des données historiques
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Lancer le backfill
+        run: |
+          FROM=${{ github.event.inputs.full_history == 'true' && '2004' || github.event.inputs.from_year }}
+          TO=${{ github.event.inputs.to_year || '' }}
+          if [ -z "$TO" ]; then
+            node scripts/backfill.js --from "$FROM"
+          else
+            node scripts/backfill.js --from "$FROM" --to "$TO"
+          fi
+        env:
+          DATA_FILE: data/draws.csv
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/draws.csv
+          git diff --staged --quiet || git commit -m "chore(data): backfill historique [skip ci]"
+          git push
+
+      - name: Résumé
+        run: |
+          COUNT=$(tail -n +2 data/draws.csv | wc -l)
+          echo "### Backfill terminé" >> $GITHUB_STEP_SUMMARY
+          echo "Total tirages en base : **$COUNT**" >> $GITHUB_STEP_SUMMARY
